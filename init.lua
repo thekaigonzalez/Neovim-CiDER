@@ -1,0 +1,263 @@
+-- [[ THE CIDER NEOVIM FRAMEWORK v1.0.0! ]]
+-- An amazing yet lightweight 
+local lsp = { "clangd", "lua_ls", "zls", "jedi_language_server" } -- Enabled Language Servers
+
+require("plugins")
+
+-- CIDER Settings for netrw, etc.
+vim.opt.termguicolors = true
+vim.opt.pumblend = 1
+
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
+-- vscode colourscheme
+vim.cmd("colorscheme codedark")
+
+local cmp = require("cmp")
+local capabilities = require("cmp_nvim_lsp").default_capabilities()
+local telescope_builtin = require("telescope.builtin");
+
+local keyset = vim.keymap.set
+
+-- Shift+F - Find
+-- CTRL+F  - Format
+-- CTRL+SHIFT+K - Make a newline and move back up.
+keyset("n", "<C-f>", ":lua format()<CR>", { noremap = true })
+keyset("n", "<C-t>", ":NvimTreeOpen<CR>", { noremap = true })
+keyset("i", "<C-K>", "\n<left><Up>", { noremap = true })
+keyset("n", "F", telescope_builtin.find_files, { noremap = true })
+keyset("n", "<C-w>", ":wq!<CR>", { noremap = true })
+keyset("n", "<C-q>", ":q!<CR>", { noremap = true })
+
+vim.api.nvim_exec2(
+	[[
+    set backspace=indent,eol,start
+" Configuration options
+	  set encoding=utf-8
+	  set nobackup
+	  set nowritebackup
+	  set updatetime=300
+	  set signcolumn=yes
+
+	  set tabstop=2
+	  set shiftwidth=2
+
+	  set expandtab	
+	  set number
+	  set autoread
+	  ]],
+	{}
+)
+
+function _G.check_back_space()
+	local col = vim.fn.col(".") - 1
+	return col == 0 or vim.fn.getline("."):sub(col, col):match("%s") ~= nil
+end
+
+function format()
+	vim.cmd("w")
+
+	if vim.bo.filetype == "c" then
+		vim.fn.system("clang-format --style=GNU -i " .. vim.fn.expand("%"))
+	elseif vim.bo.filetype == "lua" then
+		vim.fn.system("stylua " .. vim.fn.expand("%"))
+	elseif vim.bo.filetype == "zig" then
+		vim.fn.system("zig fmt " .. vim.fn.expand("%"))
+	end
+
+	vim.cmd("edit!")
+end
+
+local _border = "rounded"
+
+require("lspconfig.ui.windows").default_options = {
+	border = _border,
+}
+
+vim.diagnostic.config({
+	float = { border = _border },
+})
+
+cmp.setup({
+	snippet = {
+		expand = function(args)
+			vim.fn["vsnip#anonymous"](args.body) -- For `vsnip` users.
+		end,
+	},
+	window = {
+		completion = {
+			border = _border,
+			winhighlight = "Normal:Normal,FloatBorder:Normal,CursorLine:Visual,Search:None",
+		},
+		documentation = cmp.config.window.bordered({
+			border = _border,
+			winhighlight = "Normal:Normal,FloatBorder:Normal,CursorLine:Visual,Search:None",
+		}),
+	},
+	-- mappings for
+	mapping = cmp.mapping.preset.insert({
+		["<C-b>"] = cmp.mapping.scroll_docs(-4),
+		["<C-f>"] = cmp.mapping.scroll_docs(4),
+		["<C-Space>"] = cmp.mapping.complete(),
+		["<C-e>"] = cmp.mapping.abort(),
+		["<Tab>"] = cmp.mapping.confirm({ select = true }),
+		["<CR>"] = cmp.mapping.confirm({ select = true }),
+	}),
+	sources = cmp.config.sources({
+		{ name = "nvim_lsp" },
+		{ name = "nvim_lua" },
+		{ name = "vsnip" }, -- For vsnip users.
+	}, {
+		{ name = "buffer" },
+	}),
+})
+
+-- Set configuration for specific filetype.
+cmp.setup.filetype("gitcommit", {
+	sources = cmp.config.sources({
+		{ name = "git" }, -- You can specify the `git` source if [you were installed it](https://github.com/petertriho/cmp-git).
+	}, {
+		{ name = "buffer" },
+	}),
+})
+
+-- Use buffer source for `/` and `?` (if you enabled `native_menu`, this won't work anymore).
+cmp.setup.cmdline({ "/", "?" }, {
+	mapping = cmp.mapping.preset.cmdline(),
+	sources = {
+		{ name = "buffer" },
+	},
+})
+
+-- Use cmdline & path source for ':' (if you enabled `native_menu`, this won't work anymore).
+cmp.setup.cmdline(":", {
+	mapping = cmp.mapping.preset.cmdline(),
+	sources = cmp.config.sources({
+		{ name = "path" },
+	}, {
+		{ name = "cmdline" },
+	}),
+})
+
+local function ternary(cond, T, F)
+	if cond then
+		return T
+	else
+		return F
+	end
+end
+
+require("neodev").setup({})
+
+for _, v in ipairs(lsp) do
+	require("lspconfig")[v].setup({
+		capabilities = ternary((type(v) == "string"), capabilities, v.capabilities),
+	})
+end
+
+require("lspconfig")["lua_ls"].setup({
+	capabilities = capabilities,
+})
+
+require("lspconfig")["lua_ls"].setup({
+	settings = {
+		Lua = {
+			completion = {
+				callSnippet = "Replace",
+			},
+		},
+	},
+})
+
+require("clangd_extensions").setup({
+	inlay_hints = {
+		inline = vim.fn.has("nvim-0.10") == 1,
+		-- Options other than `highlight' and `priority' only work
+		-- if `inline' is disabled
+		-- Only show inlay hints for the current line
+		only_current_line = false,
+		-- Event which triggers a refresh of the inlay hints.
+		-- You can make this { "CursorMoved" } or { "CursorMoved,CursorMovedI" } but
+		-- not that this may cause  higher CPU usage.
+		-- This option is only respected when only_current_line and
+		-- autoSetHints both are true.
+		only_current_line_autocmd = { "CursorHold" },
+		-- whether to show parameter hints with the inlay hints or not
+		show_parameter_hints = true,
+		-- prefix for parameter hints
+		parameter_hints_prefix = "<- ",
+		-- prefix for all the other hints (type, chaining)
+		other_hints_prefix = "=> ",
+		-- whether to align to the length of the longest line in the file
+		max_len_align = false,
+		-- padding from the left if max_len_align is true
+		max_len_align_padding = 1,
+		-- whether to align to the extreme right or not
+		right_align = false,
+		-- padding from the right if right_align is true
+		right_align_padding = 7,
+		-- The color of the hints
+		highlight = "Comment",
+		-- The highlight group priority for extmark
+		priority = 100,
+	},
+	ast = {
+		role_icons = {
+			type = "",
+			declaration = "",
+			expression = "",
+			specifier = "",
+			statement = "",
+			["template argument"] = "",
+		},
+
+		kind_icons = {
+			Compound = "",
+			Recovery = "",
+			TranslationUnit = "",
+			PackExpansion = "",
+			TemplateTypeParm = "",
+			TemplateTemplateParm = "",
+			TemplateParamObject = "",
+		},
+
+		highlights = {
+			detail = "Comment",
+		},
+	},
+	memory_usage = {
+		border = "none",
+	},
+	symbol_info = {
+		border = "none",
+	},
+})
+
+require("ibl").setup({})
+require("lualine").setup({})
+require("nvim-tree").setup()
+require("hoverhints").setup({})
+require("noice").setup({
+	lsp = {
+		override = {
+			["vim.lsp.util.convert_input_to_markdown_lines"] = true,
+			["vim.lsp.util.stylize_markdown"] = true,
+			["cmp.entry.get_documentation"] = true,
+		},
+	},
+	presets = {
+		bottom_search = true, -- use a classic bottom cmdline for search
+		command_palette = true, -- position the cmdline and popupmenu together
+		long_message_to_split = true, -- long messages will be sent to a split
+		inc_rename = false, -- enables an input dialog for inc-rename.nvim
+		lsp_doc_border = false, -- add a border to hover docs and signature help
+	},
+	smart_move = {
+		-- noice tries to move out of the way of existing floating windows.
+		enabled = true, -- you can disable this behaviour here
+		-- add any filetypes here, that shouldn't trigger smart move.
+		excluded_filetypes = { "cmp_menu", "cmp_docs", "notify" },
+	},
+})
+
