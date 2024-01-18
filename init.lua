@@ -9,7 +9,7 @@
 --
 
 -- [[ Specify the edition here (for developers and edition designers) ]]
-local cider_edition = "dragon"
+local cider_edition = "pythonium"
 
 if cider_edition == nil then
 	cider_edition = "average"
@@ -35,7 +35,9 @@ vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
 -- vscode colourscheme
-vim.cmd("colorscheme " .. (edition.enabled_theme or ""))
+if (not vim.g.cider_init) then
+  vim.cmd("colorscheme " .. (edition.enabled_theme or ""))
+end
 
 local cmp = require("cmp")
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
@@ -53,11 +55,15 @@ keyset("n", "<C-f>", ":lua format()<CR>", { noremap = true })
 keyset("n", "<C-t>", ":NvimTreeOpen<CR>", { noremap = true })
 keyset("i", "<C-K>", "\n<left><Up>", { noremap = true })
 keyset("n", "F", telescope_builtin.find_files, { noremap = true })
-keyset("n", "<C-w>", ":wq!<CR>", { noremap = true })
+keyset("n", "<C-w>", ":w!<CR>:BufferClose<CR>", { noremap = true })
 keyset("n", "<C-q>", ":q!<CR>", { noremap = true })
-keyset("n", "<C-a>", ":%y+<CR>", { noremap = true })
+keyset("n", "<C-a>", "ggVG", { noremap = true })
 keyset("n", "<C-s>", ":silent w<CR>", { noremap = true })
-keyset("n", "<C-c>", ":\"+y<CR>", { noremap = true })
+-- keyset("n", "<C-c>", ":%+y<CR>", { noremap = true })
+keyset("v", "<C-c>", "yy<CR>", { noremap = true })
+keyset("n", "<C-v>", "p<CR>", { noremap = true })
+keyset("n", "<C-,>", ":BufferMovePrevious<CR>", { noremap = true })
+keyset("n", "<C-.>", ":BufferMoveNext<CR>", { noremap = true })
 
 vim.api.nvim_exec2(
 	[[
@@ -97,7 +103,7 @@ function format()
 		local found = false
 
 		if edition.formatters ~= nil then
-			for k, v in pairs(edition.formatters) do
+			for k, _ in pairs(edition.formatters) do
 				if k == vim.bo.filetype then
 					found = true
 					edition.formatters[k](vim.fn.expand("%"))
@@ -126,9 +132,9 @@ vim.diagnostic.config({
 	float = lsp_objs,
 })
 
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, lsp_objs)
+-- vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, lsp_objs)
 
-vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, lsp_objs)
+-- vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, lsp_objs)
 
 cmp.setup({
 	snippet = {
@@ -289,13 +295,11 @@ function open(nargs)
 	if vim.fn.filereadable("README.md") then
 		vim.cmd("edit README.md")
 	end
-
-	vim.cmd("NvimTreeOpen")
 end
 
 vim.api.nvim_create_user_command("Open", open, { nargs = "?" })
 
-if settings.auto_open then
+if settings.auto_open and not vim.g.cider_init then
   local before = vim.fn.expand("%")
 
 	-- configure default autoopen in settings.lua
@@ -303,6 +307,8 @@ if settings.auto_open then
   vim.cmd(":b#")
   -- vim.cmd(":sb[1]")
   vim.cmd(":edit " .. before)
+
+	vim.cmd("NvimTreeOpen")
 end
 
 require("nvim-treesitter.configs").setup({
@@ -322,6 +328,7 @@ require("noice").setup({
 			["vim.lsp.util.stylize_markdown"] = true,
 			["cmp.entry.get_documentation"] = true,
 		},
+    
 	},
 	presets = {
 		bottom_search = true, -- use a classic bottom cmdline for search
@@ -337,5 +344,10 @@ require("noice").setup({
 		excluded_filetypes = { "cmp_menu", "cmp_docs", "notify" },
 	},
 })
-edition.hooks()
+
+if edition.hooks and not vim.g.cider_init then edition.hooks() end
+
+if not vim.g.cider_init then
+  vim.g.cider_init = true;
+end
 
