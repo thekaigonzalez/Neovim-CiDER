@@ -35,7 +35,7 @@ vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
 -- vscode colourscheme
-vim.cmd("colorscheme " .. edition.enabled_theme)
+vim.cmd("colorscheme " .. (edition.enabled_theme or ""))
 
 local cmp = require("cmp")
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
@@ -300,8 +300,9 @@ if settings.auto_open then
 
 	-- configure default autoopen in settings.lua
 	vim.cmd(":Open .")
-	
-  vim.cmd("b#") 
+  vim.cmd(":b#")
+  -- vim.cmd(":sb[1]")
+  vim.cmd(":edit " .. before)
 end
 
 require("nvim-treesitter.configs").setup({
@@ -309,6 +310,7 @@ require("nvim-treesitter.configs").setup({
 	highlight = { enable = true },
 	indent = { enable = true },
 })
+
 require("ibl").setup({})
 require("lualine").setup({})
 require("hoverhints").setup({})
@@ -335,5 +337,5 @@ require("noice").setup({
 		excluded_filetypes = { "cmp_menu", "cmp_docs", "notify" },
 	},
 })
-
+edition.hooks()
 
