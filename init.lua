@@ -1,8 +1,31 @@
 -- [[ THE CIDER NEOVIM FRAMEWORK v1.0.0! ]]
--- An amazing yet lightweight 
-local lsp = { "clangd", "lua_ls", "zls", "jedi_language_server" } -- Enabled Language Servers
+-- An amazing yet lightweight framework for a multitude of development,
+-- with everything inbetween coming fresh out the box!
 
-require("plugins")
+-- Custom Commands:
+--
+-- *  Open - Opens a file/directory and checks if a README.md is in it,
+--    if so then it'll read the file, to give a rundown on how the program works.
+--
+
+-- [[ Specify the edition here (for developers and edition designers) ]]
+local cider_edition = "dragon"
+
+if cider_edition == nil then
+	cider_edition = "average"
+end
+
+local configs = vim.api.nvim_list_runtime_paths()
+local now     = configs[1]
+
+package.path = package.path .. ";" .. now .. "/?.lua;" .. now .. "/editions/?.lua"
+
+require("plugins")(cider_edition)
+
+local edition = require(cider_edition)
+local settings = require("settings")
+
+local lsp = edition.enabled_languages
 
 -- CIDER Settings for netrw, etc.
 vim.opt.termguicolors = true
@@ -12,23 +35,29 @@ vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
 -- vscode colourscheme
-vim.cmd("colorscheme codedark")
+vim.cmd("colorscheme " .. edition.enabled_theme)
 
 local cmp = require("cmp")
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
-local telescope_builtin = require("telescope.builtin");
+local telescope_builtin = require("telescope.builtin")
 
 local keyset = vim.keymap.set
 
--- Shift+F - Find
--- CTRL+F  - Format
+-- Shift+F      - Find
+-- CTRL+F       - Format
 -- CTRL+SHIFT+K - Make a newline and move back up.
+-- CTRL+T       - Open the Nvim Tree Plugin
+-- CTRL+W       - Closes the current buffer
+-- CTRL+A       - Copies the entire buffer to the clipboard register.
 keyset("n", "<C-f>", ":lua format()<CR>", { noremap = true })
 keyset("n", "<C-t>", ":NvimTreeOpen<CR>", { noremap = true })
 keyset("i", "<C-K>", "\n<left><Up>", { noremap = true })
 keyset("n", "F", telescope_builtin.find_files, { noremap = true })
 keyset("n", "<C-w>", ":wq!<CR>", { noremap = true })
 keyset("n", "<C-q>", ":q!<CR>", { noremap = true })
+keyset("n", "<C-a>", ":%y+<CR>", { noremap = true })
+keyset("n", "<C-s>", ":silent w<CR>", { noremap = true })
+keyset("n", "<C-c>", ":\"+y<CR>", { noremap = true })
 
 vim.api.nvim_exec2(
 	[[
@@ -56,7 +85,7 @@ function _G.check_back_space()
 end
 
 function format()
-	vim.cmd("w")
+	vim.cmd("silent w")
 
 	if vim.bo.filetype == "c" then
 		vim.fn.system("clang-format --style=GNU -i " .. vim.fn.expand("%"))
@@ -64,6 +93,21 @@ function format()
 		vim.fn.system("stylua " .. vim.fn.expand("%"))
 	elseif vim.bo.filetype == "zig" then
 		vim.fn.system("zig fmt " .. vim.fn.expand("%"))
+	else
+		local found = false
+
+		if edition.formatters ~= nil then
+			for k, v in pairs(edition.formatters) do
+				if k == vim.bo.filetype then
+					found = true
+					edition.formatters[k](vim.fn.expand("%"))
+				end
+			end
+		end
+
+		if not found then
+			vim.notify("no formatters found for '" .. vim.bo.filetype .. "'", vim.log.levels.ERROR)
+		end
 	end
 
 	vim.cmd("edit!")
@@ -71,13 +115,20 @@ end
 
 local _border = "rounded"
 
-require("lspconfig.ui.windows").default_options = {
+local lsp_objs = {
 	border = _border,
+	winhighlight = "Normal:Normal,FloatBorder:Normal,CursorLine:Visual,Search:None",
 }
 
+require("lspconfig.ui.windows").default_options = lsp_objs
+
 vim.diagnostic.config({
-	float = { border = _border },
+	float = lsp_objs,
 })
+
+vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, lsp_objs)
+
+vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, lsp_objs)
 
 cmp.setup({
 	snippet = {
@@ -86,14 +137,8 @@ cmp.setup({
 		end,
 	},
 	window = {
-		completion = {
-			border = _border,
-			winhighlight = "Normal:Normal,FloatBorder:Normal,CursorLine:Visual,Search:None",
-		},
-		documentation = cmp.config.window.bordered({
-			border = _border,
-			winhighlight = "Normal:Normal,FloatBorder:Normal,CursorLine:Visual,Search:None",
-		}),
+		completion = lsp_objs,
+		documentation = cmp.config.window.bordered(lsp_objs),
 	},
 	-- mappings for
 	mapping = cmp.mapping.preset.insert({
@@ -149,6 +194,7 @@ local function ternary(cond, T, F)
 end
 
 require("neodev").setup({})
+require("nvim-tree").setup()
 
 for _, v in ipairs(lsp) do
 	require("lspconfig")[v].setup({
@@ -234,10 +280,39 @@ require("clangd_extensions").setup({
 	},
 })
 
+function open(nargs)
+	local arg = nargs.args
+	print("CiDER: looking for a README.md in workspace `" .. arg .. "'")
+
+	vim.cmd("cd " .. arg)
+
+	if vim.fn.filereadable("README.md") then
+		vim.cmd("edit README.md")
+	end
+
+	vim.cmd("NvimTreeOpen")
+end
+
+vim.api.nvim_create_user_command("Open", open, { nargs = "?" })
+
+if settings.auto_open then
+  local before = vim.fn.expand("%")
+
+	-- configure default autoopen in settings.lua
+	vim.cmd(":Open .")
+	
+  vim.cmd("b#") 
+end
+
+require("nvim-treesitter.configs").setup({
+  ensure_installed = "all",
+	highlight = { enable = true },
+	indent = { enable = true },
+})
 require("ibl").setup({})
 require("lualine").setup({})
-require("nvim-tree").setup()
 require("hoverhints").setup({})
+require("nvim-ts-autotag").setup({})
 require("noice").setup({
 	lsp = {
 		override = {
@@ -260,4 +335,5 @@ require("noice").setup({
 		excluded_filetypes = { "cmp_menu", "cmp_docs", "notify" },
 	},
 })
+
 

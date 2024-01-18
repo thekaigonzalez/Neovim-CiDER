@@ -1,22 +1,42 @@
+return function(edition)
+
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+
+if not vim.loop.fs_stat(lazypath) then
+  vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "https://github.com/folke/lazy.nvim.git",
+    "--branch=stable", -- latest stable release
+    lazypath,
+  })
+end
+
 vim.opt.rtp:prepend(lazypath)
+
+package.path = package.path .. ";/home/kdgonzalez/.config/nvim/editions/?.lua"
+
+local plugin_edition = require(edition)
 
 local lazy = require("lazy")
 
-lazy.setup({
-	-- Adds pairs for (  ), [  ], etc.
+local plugins_default = {
+	-- Adds pairs for (  ), [  ], etc. 
 	"jiangmiao/auto-pairs",
 
 	-- Installed themes in CiDER
 	"embark-theme/vim",
 	"Mofiqul/vscode.nvim",
-	{ "ellisonleao/gruvbox.nvim", priority = 1000, config = true, opts = ... },
+	{ "ellisonleao/gruvbox.nvim", priority = 1000, config = true, opts = {} },
 	"tomasiser/vim-code-dark",
+	"savq/melange-nvim",
 
 	-- Language-specific things
 	"neovim/nvim-lspconfig",
 	"folke/neodev.nvim",
 	"p00f/clangd_extensions.nvim",
+  "windwp/nvim-ts-autotag",
 
   -- Nvim-Cmp
 	"hrsh7th/cmp-nvim-lsp",
@@ -54,7 +74,11 @@ lazy.setup({
 	"rcarriga/nvim-notify",
 	"nvim-lua/plenary.nvim",
 
-	"lukas-reineke/indent-blankline.nvim",
+  -- Dictionary
+  "fncll/wordnet.vim",
+  "chrishrb/gx.nvim",
+  
+  "lukas-reineke/indent-blankline.nvim",
 
 	{
 		"folke/noice.nvim",
@@ -66,4 +90,12 @@ lazy.setup({
 			--   If not available, we use `mini` as the fallback
 		},
 	},
-})
+}
+
+for i,v in pairs(plugin_edition.extra_extensions) do
+  table.insert(plugins_default, v)
+end
+
+lazy.setup ( plugins_default );
+end
+
