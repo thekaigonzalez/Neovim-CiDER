@@ -2,6 +2,6 @@
 
 return {
   enabled_languages = { "clangd", "jedi_language_server", "zls" },
-  extra_extensions  = {  },
-  enabled_theme     = "melange",
+  extra_extensions  = { "navarasu/onedark.nvim" },
+  enabled_theme     = "onedark",
 }
